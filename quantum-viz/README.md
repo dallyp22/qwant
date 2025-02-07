@@ -78,19 +78,50 @@ npm run dev
 ### Expected Outputs
 
 1. **Single Qubit Operations**
-   - H gate on |0⟩: Creates equal superposition (|0⟩ + |1⟩)/√2
-   - X gate: Flips between |0⟩ and |1⟩
+   - H gate on |0⟩: Creates equal superposition (|0⟩ + |1⟩)/√2 with 50-50 probability
+   - X gate: Flips between |0⟩ and |1⟩ with 100% probability
    - Z gate: Adds phase difference (visible on Bloch sphere)
+   - S gate: Adds π/2 phase rotation
+   - T gate: Adds π/4 phase rotation
 
-2. **Multi-Qubit Effects**
+2. **Understanding Probabilities**
+   - **Basic States**:
+     - |0⟩ state: 100% probability of measuring 0
+     - |1⟩ state: 100% probability of measuring 1
+     - H|0⟩ state: 50% probability each for 0 and 1
+   
+   - **Creating Different Probabilities**:
+     1. Apply H gate to create 50-50 superposition
+     2. Apply rotation gates (S, T) to modify phases
+     3. Combine gates to create custom states:
+        - H → T → H: Approximately 85% |0⟩, 15% |1⟩
+        - H → S → H: 75% |0⟩, 25% |1⟩
+        - H → T → S → H: Different probability distribution
+
+   - **Phase Effects**:
+     - S and T gates modify the phase component
+     - Phase changes affect subsequent interference
+     - Combine with H gates to see probability changes
+
+3. **Multi-Qubit Effects**
    - CNOT: Entangles two qubits
    - Toffoli: Creates controlled operations
    - SWAP: Exchanges qubit states
 
-3. **Measurement Results**
-   - For basis states: Definite |0⟩ or |1⟩
-   - For superpositions: Probabilistic outcomes
-   - Visualization shows collapse to measured state
+4. **Example Sequences for Various Probabilities**:
+   ```
+   For 75-25 split:
+   1. Start with |0⟩
+   2. Apply H gate
+   3. Apply S gate
+   4. Apply H gate
+
+   For ~85-15 split:
+   1. Start with |0⟩
+   2. Apply H gate
+   3. Apply T gate
+   4. Apply H gate
+   ```
 
 ### Advanced Features
 
@@ -147,6 +178,18 @@ Common issues and solutions:
    - Verify file permissions
    - Check circuit validity
    - Ensure proper file extension
+
+4. **Probability Distribution Issues**
+   - **Fixed 50-50 Split**:
+     - This is normal for a single H gate
+     - Use combinations of H, S, and T gates for other distributions
+   - **Always 100%**:
+     - This indicates basis states (|0⟩ or |1⟩)
+     - Apply H gate first to create superposition
+   - **Unexpected Distributions**:
+     - Check gate order
+     - Verify phase rotations
+     - Remember that measurement collapses the state
 
 ## Contributing
 
