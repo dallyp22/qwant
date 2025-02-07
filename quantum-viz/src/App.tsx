@@ -3,6 +3,8 @@ import { styled } from '@mui/material/styles';
 import { Box, Container, CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import CircuitEditor from './components/CircuitEditor';
 import VisualizationPanel from './components/VisualizationPanel';
+import AdvancedControls from './components/AdvancedControls';
+import CircuitDiagram from './components/CircuitDiagram';
 import { QuantumStateProvider } from './context/QuantumStateContext';
 
 const theme = createTheme({
@@ -34,6 +36,8 @@ const Panel = styled(Box)({
   flexDirection: 'column',
   gap: '1rem',
   minWidth: 0,
+  maxHeight: '100%',
+  overflowY: 'auto',
 });
 
 function App() {
@@ -44,6 +48,8 @@ function App() {
         <AppContainer maxWidth={false}>
           <Panel>
             <CircuitEditor />
+            <CircuitDiagram />
+            <AdvancedControls />
           </Panel>
           <Panel>
             <VisualizationPanel />

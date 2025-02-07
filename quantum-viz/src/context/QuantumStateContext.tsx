@@ -8,18 +8,35 @@ interface ComplexNumber {
 interface Qubit {
   alpha: ComplexNumber;
   beta: ComplexNumber;
+  error?: 'bit-flip' | 'phase-flip' | null;
+}
+
+interface CustomGate {
+  name: string;
+  matrix: ComplexNumber[][];
+  description: string;
 }
 
 interface QuantumState {
   qubits: Qubit[];
   history: string[];
+  customGates: CustomGate[];
+  errorCorrectionEnabled: boolean;
 }
 
 type Action =
   | { type: 'ADD_QUBIT' }
+  | { type: 'REMOVE_QUBIT' }
   | { type: 'APPLY_GATE'; payload: { gate: string; qubit: number } }
+  | { type: 'APPLY_CUSTOM_GATE'; payload: { gateName: string; qubit: number } }
   | { type: 'APPLY_CNOT'; payload: { control: number; target: number } }
+  | { type: 'APPLY_TOFFOLI'; payload: { control1: number; control2: number; target: number } }
   | { type: 'APPLY_SWAP'; payload: { qubit1: number; qubit2: number } }
+  | { type: 'MEASURE_QUBIT'; payload: { qubit: number } }
+  | { type: 'ADD_CUSTOM_GATE'; payload: CustomGate }
+  | { type: 'TOGGLE_ERROR_CORRECTION'; payload: boolean }
+  | { type: 'APPLY_ERROR'; payload: { qubit: number; errorType: 'bit-flip' | 'phase-flip' } }
+  | { type: 'CORRECT_ERRORS' }
   | { type: 'RESET_CIRCUIT' }
   | { type: 'UNDO' };
 
@@ -45,6 +62,14 @@ const QUANTUM_GATES = {
   Z: [
     [{ real: 1, imag: 0 }, { real: 0, imag: 0 }],
     [{ real: 0, imag: 0 }, { real: -1, imag: 0 }]
+  ],
+  S: [
+    [{ real: 1, imag: 0 }, { real: 0, imag: 0 }],
+    [{ real: 0, imag: 0 }, { real: 0, imag: 1 }]
+  ],
+  T: [
+    [{ real: 1, imag: 0 }, { real: 0, imag: 0 }],
+    [{ real: 0, imag: 0 }, { real: Math.cos(Math.PI/4), imag: Math.sin(Math.PI/4) }]
   ]
 };
 
@@ -120,12 +145,149 @@ function applySwap(state: QuantumState, qubit1: number, qubit2: number): Quantum
   };
 }
 
+// Add Toffoli operation
+function applyToffoli(state: QuantumState, control1: number, control2: number, target: number): QuantumState {
+  if (control1 >= state.qubits.length || control2 >= state.qubits.length || target >= state.qubits.length) {
+    return state;
+  }
+
+  const control1Qubit = state.qubits[control1];
+  const control2Qubit = state.qubits[control2];
+  const targetQubit = state.qubits[target];
+  
+  // Check if both control qubits are in |1⟩ state
+  const control1Prob1 = control1Qubit.beta.real * control1Qubit.beta.real + 
+                       control1Qubit.beta.imag * control1Qubit.beta.imag;
+  const control2Prob1 = control2Qubit.beta.real * control2Qubit.beta.real + 
+                       control2Qubit.beta.imag * control2Qubit.beta.imag;
+  
+  if (control1Prob1 > 0.5 && control2Prob1 > 0.5) {
+    // Apply X gate to target qubit
+    const newTargetQubit = applyGate(targetQubit, QUANTUM_GATES.X);
+    const newQubits = [...state.qubits];
+    newQubits[target] = newTargetQubit;
+    return {
+      ...state,
+      qubits: newQubits,
+      history: [...state.history, `Applied Toffoli with controls=${control1},${control2} and target=${target}`]
+    };
+  }
+  
+  return state;
+}
+
+// Add measurement operation
+function measureQubit(state: QuantumState, qubitIndex: number): QuantumState {
+  if (qubitIndex >= state.qubits.length) {
+    return state;
+  }
+
+  const qubit = state.qubits[qubitIndex];
+  const [prob0, prob1] = getMeasurementProbabilities(qubit);
+  
+  // Random measurement based on probabilities
+  const measurement = Math.random() < prob0 ? 0 : 1;
+  
+  const newQubits = [...state.qubits];
+  newQubits[qubitIndex] = {
+    alpha: measurement === 0 ? { real: 1, imag: 0 } : { real: 0, imag: 0 },
+    beta: measurement === 1 ? { real: 1, imag: 0 } : { real: 0, imag: 0 }
+  };
+
+  return {
+    ...state,
+    qubits: newQubits,
+    history: [...state.history, `Measured qubit ${qubitIndex}: |${measurement}⟩`]
+  };
+}
+
+// Error correction codes
+const BitFlipCode = {
+  encode: (qubit: Qubit): Qubit[] => {
+    // Encode logical qubit into three physical qubits
+    return [
+      { ...qubit },
+      { ...qubit },
+      { ...qubit }
+    ];
+  },
+  decode: (qubits: Qubit[]): Qubit => {
+    // Majority vote to correct bit-flip errors
+    const votes = qubits.map(q => 
+      (q.beta.real * q.beta.real + q.beta.imag * q.beta.imag) > 0.5 ? 1 : 0
+    );
+    const majorityVote = votes.filter(v => v === 1).length > votes.length / 2 ? 1 : 0;
+    
+    return {
+      alpha: majorityVote === 0 ? { real: 1, imag: 0 } : { real: 0, imag: 0 },
+      beta: majorityVote === 1 ? { real: 1, imag: 0 } : { real: 0, imag: 0 }
+    };
+  }
+};
+
+const PhaseFlipCode = {
+  encode: (qubit: Qubit): Qubit[] => {
+    // Apply Hadamard gates before and after bit-flip code
+    const encoded = BitFlipCode.encode(qubit);
+    return encoded.map(q => applyGate(q, QUANTUM_GATES.H));
+  },
+  decode: (qubits: Qubit[]): Qubit => {
+    // Apply Hadamard gates, then use bit-flip correction
+    const decoded = qubits.map(q => applyGate(q, QUANTUM_GATES.H));
+    return BitFlipCode.decode(decoded);
+  }
+};
+
+// Add error simulation
+function simulateError(qubit: Qubit, errorType: 'bit-flip' | 'phase-flip'): Qubit {
+  if (errorType === 'bit-flip') {
+    return applyGate(qubit, QUANTUM_GATES.X);
+  } else {
+    return applyGate(qubit, QUANTUM_GATES.Z);
+  }
+}
+
+function applyErrorCorrection(state: QuantumState): QuantumState {
+  if (!state.errorCorrectionEnabled) return state;
+
+  const newQubits = [...state.qubits];
+  for (let i = 0; i < newQubits.length; i += 3) {
+    if (i + 2 < newQubits.length) {
+      const logicalQubit = [newQubits[i], newQubits[i + 1], newQubits[i + 2]];
+      const hasPhaseError = logicalQubit.some(q => q.error === 'phase-flip');
+      const hasBitError = logicalQubit.some(q => q.error === 'bit-flip');
+
+      let correctedQubit: Qubit;
+      if (hasPhaseError) {
+        correctedQubit = PhaseFlipCode.decode(logicalQubit);
+      } else if (hasBitError) {
+        correctedQubit = BitFlipCode.decode(logicalQubit);
+      } else {
+        continue;
+      }
+
+      newQubits[i] = { ...correctedQubit, error: null };
+      newQubits[i + 1] = { ...correctedQubit, error: null };
+      newQubits[i + 2] = { ...correctedQubit, error: null };
+    }
+  }
+
+  return {
+    ...state,
+    qubits: newQubits,
+    history: [...state.history, 'Applied error correction']
+  };
+}
+
 const initialState: QuantumState = {
   qubits: [{
     alpha: { real: 1, imag: 0 },
-    beta: { real: 0, imag: 0 }
+    beta: { real: 0, imag: 0 },
+    error: null
   }],
-  history: []
+  history: [],
+  customGates: [],
+  errorCorrectionEnabled: false
 };
 
 function quantumReducer(state: QuantumState, action: Action): QuantumState {
@@ -135,9 +297,19 @@ function quantumReducer(state: QuantumState, action: Action): QuantumState {
         ...state,
         qubits: [
           ...state.qubits,
-          { alpha: { real: 1, imag: 0 }, beta: { real: 0, imag: 0 } }
+          { alpha: { real: 1, imag: 0 }, beta: { real: 0, imag: 0 }, error: null }
         ],
         history: [...state.history, 'Added new qubit']
+      };
+
+    case 'REMOVE_QUBIT':
+      if (state.qubits.length <= 1) {
+        return state;
+      }
+      return {
+        ...state,
+        qubits: state.qubits.slice(0, -1),
+        history: [...state.history, 'Removed qubit']
       };
 
     case 'APPLY_GATE': {
@@ -158,6 +330,57 @@ function quantumReducer(state: QuantumState, action: Action): QuantumState {
 
     case 'APPLY_SWAP':
       return applySwap(state, action.payload.qubit1, action.payload.qubit2);
+
+    case 'APPLY_TOFFOLI':
+      return applyToffoli(state, action.payload.control1, action.payload.control2, action.payload.target);
+
+    case 'MEASURE_QUBIT':
+      return measureQubit(state, action.payload.qubit);
+
+    case 'ADD_CUSTOM_GATE':
+      return {
+        ...state,
+        customGates: [...state.customGates, action.payload],
+        history: [...state.history, `Added custom gate ${action.payload.name}`]
+      };
+
+    case 'TOGGLE_ERROR_CORRECTION':
+      return {
+        ...state,
+        errorCorrectionEnabled: action.payload,
+        history: [...state.history, `${action.payload ? 'Enabled' : 'Disabled'} error correction`]
+      };
+
+    case 'APPLY_ERROR': {
+      const newQubits = [...state.qubits];
+      if (action.payload.qubit < newQubits.length) {
+        newQubits[action.payload.qubit] = {
+          ...simulateError(newQubits[action.payload.qubit], action.payload.errorType),
+          error: action.payload.errorType
+        };
+      }
+      return {
+        ...state,
+        qubits: newQubits,
+        history: [...state.history, `Applied ${action.payload.errorType} to qubit ${action.payload.qubit}`]
+      };
+    }
+
+    case 'CORRECT_ERRORS':
+      return applyErrorCorrection(state);
+
+    case 'APPLY_CUSTOM_GATE': {
+      const customGate = state.customGates.find(g => g.name === action.payload.gateName);
+      if (!customGate || action.payload.qubit >= state.qubits.length) return state;
+
+      const newQubits = [...state.qubits];
+      newQubits[action.payload.qubit] = applyGate(newQubits[action.payload.qubit], customGate.matrix);
+      return {
+        ...state,
+        qubits: newQubits,
+        history: [...state.history, `Applied custom gate ${action.payload.gateName} to qubit ${action.payload.qubit}`]
+      };
+    }
 
     case 'RESET_CIRCUIT':
       return initialState;
