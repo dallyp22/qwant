@@ -230,8 +230,32 @@ function CircuitEditor() {
   };
 
   const handleRunCircuit = () => {
-    // This will be implemented to execute the circuit from the CircuitDiagram
-    console.log('Running circuit...');
+    // Reset any previous measurement results
+    setMeasurementResult(null);
+
+    // Measure each qubit and collect results
+    let measurementString = '';
+    state.qubits.forEach((_, index) => {
+      // Measure the qubit
+      dispatch({ type: 'MEASURE_QUBIT', payload: { qubit: index } });
+      
+      // Get the last action from history which should be the measurement result
+      const lastAction = state.history[state.history.length - 1];
+      if (lastAction && lastAction.startsWith('Measured')) {
+        const resultMatch = lastAction.match(/\|(\d+)⟩/);
+        if (resultMatch && resultMatch[1]) {
+          measurementString += resultMatch[1];
+        }
+      }
+    });
+
+    // Show results dialog with the complete measurement string
+    if (measurementString) {
+      setMeasurementResult({
+        qubit: -1, // Special value to indicate multiple qubits
+        result: measurementString
+      });
+    }
   };
 
   return (
@@ -240,17 +264,21 @@ function CircuitEditor() {
         <Typography variant="h6">Quantum Circuit Editor</Typography>
         <ButtonContainer>
           <Tooltip title="Add Qubit">
-            <IconButton onClick={handleAddQubit}>
-              <AddIcon />
-            </IconButton>
+            <span>
+              <IconButton onClick={handleAddQubit}>
+                <AddIcon />
+              </IconButton>
+            </span>
           </Tooltip>
           <Tooltip title="Remove Qubit">
-            <IconButton 
-              onClick={handleRemoveQubit}
-              disabled={state.qubits.length <= 1}
-            >
-              <RemoveIcon />
-            </IconButton>
+            <span>
+              <IconButton 
+                onClick={handleRemoveQubit}
+                disabled={state.qubits.length <= 1}
+              >
+                <RemoveIcon />
+              </IconButton>
+            </span>
           </Tooltip>
         </ButtonContainer>
       </Box>
@@ -266,17 +294,21 @@ function CircuitEditor() {
           Qubits: {state.qubits.length}
         </Typography>
         <Tooltip title="Undo Last Action">
-          <IconButton 
-            onClick={handleUndo} 
-            disabled={state.history.length === 0}
-          >
-            <UndoIcon />
-          </IconButton>
+          <span>
+            <IconButton 
+              onClick={handleUndo} 
+              disabled={state.history.length === 0}
+            >
+              <UndoIcon />
+            </IconButton>
+          </span>
         </Tooltip>
         <Tooltip title="Reset Circuit">
-          <IconButton onClick={handleReset} color="error">
-            <RestartAltIcon />
-          </IconButton>
+          <span>
+            <IconButton onClick={handleReset} color="error">
+              <RestartAltIcon />
+            </IconButton>
+          </span>
         </Tooltip>
       </ControlsContainer>
       <CircuitGrid>
@@ -285,21 +317,25 @@ function CircuitEditor() {
             <Typography variant="body2">Q{qubitIndex}</Typography>
             {QUANTUM_GATES.map((gate) => (
               <Tooltip key={gate.name} title={gate.tooltip}>
-                <GateButton
-                  variant="outlined"
-                  onClick={() => handleApplyGate(gate.name, qubitIndex)}
-                >
-                  {gate.label}
-                </GateButton>
+                <span>
+                  <GateButton
+                    variant="outlined"
+                    onClick={() => handleApplyGate(gate.name, qubitIndex)}
+                  >
+                    {gate.label}
+                  </GateButton>
+                </span>
               </Tooltip>
             ))}
             <Tooltip title="Measure Qubit">
-              <MultiQubitGateButton
-                size="small"
-                onClick={() => handleMeasure(qubitIndex)}
-              >
-                <RadioButtonCheckedIcon />
-              </MultiQubitGateButton>
+              <span>
+                <MultiQubitGateButton
+                  size="small"
+                  onClick={() => handleMeasure(qubitIndex)}
+                >
+                  <RadioButtonCheckedIcon />
+                </MultiQubitGateButton>
+              </span>
             </Tooltip>
             {state.qubits.length > 1 && (
               <MultiQubitGateMenu
@@ -316,17 +352,21 @@ function CircuitEditor() {
 
       <ControlPanel>
         <Tooltip title="Undo Last Action">
-          <IconButton 
-            onClick={handleUndo} 
-            disabled={state.history.length === 0}
-          >
-            <UndoIcon />
-          </IconButton>
+          <span>
+            <IconButton 
+              onClick={handleUndo} 
+              disabled={state.history.length === 0}
+            >
+              <UndoIcon />
+            </IconButton>
+          </span>
         </Tooltip>
         <Tooltip title="Reset Circuit">
-          <IconButton onClick={handleReset} color="error">
-            <RestartAltIcon />
-          </IconButton>
+          <span>
+            <IconButton onClick={handleReset} color="error">
+              <RestartAltIcon />
+            </IconButton>
+          </span>
         </Tooltip>
       </ControlPanel>
 
@@ -337,7 +377,15 @@ function CircuitEditor() {
         <DialogTitle>Measurement Result</DialogTitle>
         <DialogContent>
           <Typography>
-            Qubit {measurementResult?.qubit} collapsed to |{measurementResult?.result}⟩
+            {measurementResult?.qubit === -1 ? (
+              <>
+                Circuit Result: |{measurementResult?.result}⟩
+              </>
+            ) : (
+              <>
+                Qubit {measurementResult?.qubit} collapsed to |{measurementResult?.result}⟩
+              </>
+            )}
           </Typography>
         </DialogContent>
         <DialogActions>

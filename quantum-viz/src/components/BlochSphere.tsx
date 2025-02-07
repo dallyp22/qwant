@@ -10,6 +10,10 @@ interface SphereLineProps {
   lineWidth?: number;
 }
 
+interface BlochSphereProps {
+  qubitIndex: number;
+}
+
 function SphereLine({ points, color = 'gray', lineWidth = 1 }: SphereLineProps) {
   return (
     <Line
@@ -20,14 +24,14 @@ function SphereLine({ points, color = 'gray', lineWidth = 1 }: SphereLineProps) 
   );
 }
 
-function BlochSphere() {
+function BlochSphere({ qubitIndex }: BlochSphereProps) {
   const sphereRef = useRef<THREE.Group>(null);
   const { state } = useQuantumState();
   
-  // We'll visualize the first qubit's state
+  // Get the state of the specified qubit
   const coordinates = useMemo(() => 
-    getBlochSphereCoordinates(state.qubits[0]),
-    [state.qubits[0]]
+    getBlochSphereCoordinates(state.qubits[qubitIndex]),
+    [state.qubits[qubitIndex]]
   );
 
   // Create sphere wireframe points

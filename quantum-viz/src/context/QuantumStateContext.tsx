@@ -69,7 +69,7 @@ const QUANTUM_GATES = {
   ],
   T: [
     [{ real: 1, imag: 0 }, { real: 0, imag: 0 }],
-    [{ real: 0, imag: 0 }, { real: Math.cos(Math.PI/4), imag: Math.sin(Math.PI/4) }]
+    [{ real: 0, imag: 0 }, { real: Math.cos(Math.PI/8), imag: Math.sin(Math.PI/8) }]
   ]
 };
 
@@ -84,6 +84,9 @@ const complexMult = (a: ComplexNumber, b: ComplexNumber): ComplexNumber => ({
   imag: a.real * b.imag + a.imag * b.real
 });
 
+const complexMagnitudeSquared = (a: ComplexNumber): number => 
+  a.real * a.real + a.imag * a.imag;
+
 // Apply a single-qubit gate to a quantum state
 const applyGate = (state: Qubit, gate: ComplexNumber[][]): Qubit => {
   const newAlpha = complexAdd(
@@ -94,7 +97,22 @@ const applyGate = (state: Qubit, gate: ComplexNumber[][]): Qubit => {
     complexMult(gate[1][0], state.alpha),
     complexMult(gate[1][1], state.beta)
   );
-  return { alpha: newAlpha, beta: newBeta };
+
+  // Normalize the state
+  const normalization = Math.sqrt(
+    complexMagnitudeSquared(newAlpha) + complexMagnitudeSquared(newBeta)
+  );
+
+  return {
+    alpha: {
+      real: newAlpha.real / normalization,
+      imag: newAlpha.imag / normalization
+    },
+    beta: {
+      real: newBeta.real / normalization,
+      imag: newBeta.imag / normalization
+    }
+  };
 };
 
 // Add CNOT operation

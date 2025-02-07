@@ -1,11 +1,12 @@
 import React from 'react';
 import { styled } from '@mui/material/styles';
-import { Paper, Typography, Box } from '@mui/material';
+import { Paper, Typography, Box, Tabs, Tab } from '@mui/material';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import BlochSphere from './BlochSphere';
 import ProbabilityChart from './ProbabilityChart';
 import { useQuantumExplanation } from '../hooks/useQuantumExplanation';
+import { useQuantumState } from '../context/QuantumStateContext';
 
 const VisualizationContainer = styled(Paper)(({ theme }) => ({
   padding: theme.spacing(2),
@@ -29,7 +30,13 @@ const ExplanationPanel = styled(Paper)(({ theme }) => ({
 }));
 
 function VisualizationPanel() {
+  const { state } = useQuantumState();
   const explanation = useQuantumExplanation();
+  const [selectedQubit, setSelectedQubit] = React.useState(0);
+
+  const handleQubitChange = (event: React.SyntheticEvent, newValue: number) => {
+    setSelectedQubit(newValue);
+  };
 
   return (
     <VisualizationContainer elevation={3}>
@@ -37,11 +44,22 @@ function VisualizationPanel() {
         Quantum State Visualization
       </Typography>
 
+      <Tabs
+        value={selectedQubit}
+        onChange={handleQubitChange}
+        variant="scrollable"
+        scrollButtons="auto"
+      >
+        {state.qubits.map((_, index) => (
+          <Tab key={index} label={`Qubit ${index}`} />
+        ))}
+      </Tabs>
+
       <CanvasContainer>
         <Canvas camera={{ position: [0, 0, 3] }}>
           <ambientLight intensity={0.5} />
           <pointLight position={[10, 10, 10]} />
-          <BlochSphere />
+          <BlochSphere qubitIndex={selectedQubit} />
           <OrbitControls enablePan={false} />
         </Canvas>
       </CanvasContainer>
@@ -50,7 +68,7 @@ function VisualizationPanel() {
         <Typography variant="subtitle1" gutterBottom>
           Measurement Probabilities
         </Typography>
-        <ProbabilityChart />
+        <ProbabilityChart qubitIndex={selectedQubit} />
       </Box>
 
       <ExplanationPanel>

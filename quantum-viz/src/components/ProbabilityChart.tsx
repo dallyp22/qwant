@@ -7,15 +7,19 @@ interface ProbabilityData {
   probability: number;
 }
 
-function ProbabilityChart() {
+interface ProbabilityChartProps {
+  qubitIndex: number;
+}
+
+function ProbabilityChart({ qubitIndex }: ProbabilityChartProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const { state } = useQuantumState();
 
   useEffect(() => {
     if (!svgRef.current) return;
 
-    // Get probabilities for the first qubit
-    const [prob0, prob1] = getMeasurementProbabilities(state.qubits[0]);
+    // Get probabilities for the specified qubit
+    const [prob0, prob1] = getMeasurementProbabilities(state.qubits[qubitIndex]);
     const data: ProbabilityData[] = [
       { state: '|0⟩', probability: prob0 },
       { state: '|1⟩', probability: prob1 },
@@ -77,7 +81,7 @@ function ProbabilityChart() {
       .attr('text-anchor', 'middle')
       .text(d => `${(d.probability * 100).toFixed(1)}%`);
 
-  }, [state.qubits[0]]);
+  }, [state.qubits[qubitIndex]]);
 
   return (
     <svg
