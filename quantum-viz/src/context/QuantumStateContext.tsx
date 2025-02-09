@@ -28,16 +28,16 @@ type Action =
   | { type: 'ADD_QUBIT' }
   | { type: 'REMOVE_QUBIT' }
   | { type: 'APPLY_GATE'; payload: { gate: string; qubit: number } }
-  | { type: 'APPLY_CUSTOM_GATE'; payload: { gateName: string; qubit: number } }
+  | { type: 'APPLY_CUSTOM_GATE'; payload: { matrix: ComplexNumber[][]; qubit: number } }
   | { type: 'APPLY_CNOT'; payload: { control: number; target: number } }
   | { type: 'APPLY_TOFFOLI'; payload: { control1: number; control2: number; target: number } }
   | { type: 'APPLY_SWAP'; payload: { qubit1: number; qubit2: number } }
   | { type: 'MEASURE_QUBIT'; payload: { qubit: number } }
   | { type: 'ADD_CUSTOM_GATE'; payload: CustomGate }
-  | { type: 'TOGGLE_ERROR_CORRECTION'; payload: boolean }
-  | { type: 'APPLY_ERROR'; payload: { qubit: number; errorType: 'bit-flip' | 'phase-flip' } }
+  | { type: 'TOGGLE_ERROR_CORRECTION' }
+  | { type: 'APPLY_ERROR'; payload: { qubit: number; type: 'bit-flip' | 'phase-flip' } }
   | { type: 'CORRECT_ERRORS' }
-  | { type: 'RESET_CIRCUIT' }
+  | { type: 'RESET' }
   | { type: 'UNDO' };
 
 interface QuantumStateContextType {
@@ -298,17 +298,19 @@ function applyErrorCorrection(state: QuantumState): QuantumState {
 }
 
 const initialState: QuantumState = {
-  qubits: [{
-    alpha: { real: 1, imag: 0 },
-    beta: { real: 0, imag: 0 },
-    error: null
-  }],
+  qubits: [
+    {
+      alpha: { real: 1, imag: 0 },
+      beta: { real: 0, imag: 0 },
+      error: null
+    }
+  ],
   history: [],
   customGates: [],
   errorCorrectionEnabled: false
 };
 
-function quantumReducer(state: QuantumState, action: Action): QuantumState {
+function quantumStateReducer(state: QuantumState, action: Action): QuantumState {
   switch (action.type) {
     case 'ADD_QUBIT':
       return {
@@ -365,22 +367,22 @@ function quantumReducer(state: QuantumState, action: Action): QuantumState {
     case 'TOGGLE_ERROR_CORRECTION':
       return {
         ...state,
-        errorCorrectionEnabled: action.payload,
-        history: [...state.history, `${action.payload ? 'Enabled' : 'Disabled'} error correction`]
+        errorCorrectionEnabled: !state.errorCorrectionEnabled,
+        history: [...state.history, `${state.errorCorrectionEnabled ? 'Disabled' : 'Enabled'} error correction`]
       };
 
     case 'APPLY_ERROR': {
       const newQubits = [...state.qubits];
       if (action.payload.qubit < newQubits.length) {
         newQubits[action.payload.qubit] = {
-          ...simulateError(newQubits[action.payload.qubit], action.payload.errorType),
-          error: action.payload.errorType
+          ...simulateError(newQubits[action.payload.qubit], action.payload.type),
+          error: action.payload.type
         };
       }
       return {
         ...state,
         qubits: newQubits,
-        history: [...state.history, `Applied ${action.payload.errorType} to qubit ${action.payload.qubit}`]
+        history: [...state.history, `Applied ${action.payload.type} to qubit ${action.payload.qubit}`]
       };
     }
 
@@ -388,20 +390,27 @@ function quantumReducer(state: QuantumState, action: Action): QuantumState {
       return applyErrorCorrection(state);
 
     case 'APPLY_CUSTOM_GATE': {
-      const customGate = state.customGates.find(g => g.name === action.payload.gateName);
-      if (!customGate || action.payload.qubit >= state.qubits.length) return state;
-
       const newQubits = [...state.qubits];
-      newQubits[action.payload.qubit] = applyGate(newQubits[action.payload.qubit], customGate.matrix);
+      const { matrix, qubit } = action.payload;
+      const targetQubit = newQubits[qubit];
+      const newState = applyGate(matrix, [targetQubit.alpha, targetQubit.beta]);
+      newQubits[qubit] = {
+        ...targetQubit,
+        alpha: newState[0],
+        beta: newState[1]
+      };
       return {
         ...state,
         qubits: newQubits,
-        history: [...state.history, `Applied custom gate ${action.payload.gateName} to qubit ${action.payload.qubit}`]
+        history: [...state.history, `Applied custom gate to qubit ${qubit}`]
       };
     }
 
-    case 'RESET_CIRCUIT':
-      return initialState;
+    case 'RESET':
+      return {
+        ...initialState,
+        history: [...state.history, 'Reset quantum state']
+      };
 
     case 'UNDO':
       if (state.history.length === 0) return state;
@@ -420,7 +429,7 @@ function quantumReducer(state: QuantumState, action: Action): QuantumState {
 const QuantumStateContext = createContext<QuantumStateContextType | null>(null);
 
 export function QuantumStateProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(quantumReducer, initialState);
+  const [state, dispatch] = useReducer(quantumStateReducer, initialState);
 
   return (
     <QuantumStateContext.Provider value={{ state, dispatch }}>

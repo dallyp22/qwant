@@ -5,6 +5,7 @@ import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import BlochSphere from './BlochSphere';
 import ProbabilityChart from './ProbabilityChart';
+import QuantumSimulation from './QuantumSimulation';
 import { useQuantumExplanation } from '../hooks/useQuantumExplanation';
 import { useQuantumState } from '../context/QuantumStateContext';
 
@@ -29,55 +30,55 @@ const ExplanationPanel = styled(Paper)(({ theme }) => ({
   backgroundColor: theme.palette.grey[50],
 }));
 
+function TabPanel(props: { children?: React.ReactNode; index: number; value: number }) {
+  const { children, value, index } = props;
+  return (
+    <Box hidden={value !== index} sx={{ height: '100%' }}>
+      {value === index && children}
+    </Box>
+  );
+}
+
 function VisualizationPanel() {
+  const [selectedTab, setSelectedTab] = React.useState(0);
   const { state } = useQuantumState();
   const explanation = useQuantumExplanation();
-  const [selectedQubit, setSelectedQubit] = React.useState(0);
 
-  const handleQubitChange = (event: React.SyntheticEvent, newValue: number) => {
-    setSelectedQubit(newValue);
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setSelectedTab(newValue);
   };
 
   return (
-    <VisualizationContainer elevation={3}>
-      <Typography variant="h6" gutterBottom>
-        Quantum State Visualization
-      </Typography>
-
-      <Tabs
-        value={selectedQubit}
-        onChange={handleQubitChange}
-        variant="scrollable"
-        scrollButtons="auto"
-      >
-        {state.qubits.map((_, index) => (
-          <Tab key={index} label={`Qubit ${index}`} />
-        ))}
-      </Tabs>
-
-      <CanvasContainer>
-        <Canvas camera={{ position: [0, 0, 3] }}>
-          <ambientLight intensity={0.5} />
-          <pointLight position={[10, 10, 10]} />
-          <BlochSphere qubitIndex={selectedQubit} />
-          <OrbitControls enablePan={false} />
-        </Canvas>
-      </CanvasContainer>
-
-      <Box sx={{ height: '200px' }}>
-        <Typography variant="subtitle1" gutterBottom>
-          Measurement Probabilities
-        </Typography>
-        <ProbabilityChart qubitIndex={selectedQubit} />
+    <VisualizationContainer>
+      <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+        <Tabs value={selectedTab} onChange={handleTabChange}>
+          <Tab label="Bloch Sphere" />
+          <Tab label="Probabilities" />
+          <Tab label="Quantum Simulation" />
+        </Tabs>
       </Box>
 
+      <TabPanel value={selectedTab} index={0}>
+        <CanvasContainer>
+          <Canvas>
+            <ambientLight intensity={0.5} />
+            <pointLight position={[10, 10, 10]} />
+            <BlochSphere qubitIndex={0} />
+            <OrbitControls />
+          </Canvas>
+        </CanvasContainer>
+      </TabPanel>
+
+      <TabPanel value={selectedTab} index={1}>
+        <ProbabilityChart qubitIndex={0} />
+      </TabPanel>
+
+      <TabPanel value={selectedTab} index={2}>
+        <QuantumSimulation />
+      </TabPanel>
+
       <ExplanationPanel>
-        <Typography variant="subtitle2" gutterBottom>
-          Explanation
-        </Typography>
-        <Typography variant="body2">
-          {explanation}
-        </Typography>
+        <Typography variant="body2">{explanation}</Typography>
       </ExplanationPanel>
     </VisualizationContainer>
   );
